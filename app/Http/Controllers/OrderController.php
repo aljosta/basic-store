@@ -1,10 +1,16 @@
 <?php
 
 namespace App\Http\Controllers;
-
-use GuzzleHttp\Client;
-use App\Models\Order;
+ 
+use Exception;
 use Illuminate\Http\Request;
+use Src\Order\Application\CreateOrderUseCase;
+use Src\Order\Application\FindOrderUseCase;
+use Src\Order\Application\GetAllOrdersUseCase;
+use Src\Order\Application\GetOrderPaymentUseCase;
+use Src\Order\Application\ProcessOrderPaymentUseCase;
+use Src\Order\Infrastructure\EloquentOrderRepository;
+use Src\Order\Infrastructure\PlaceToPayService;
 
 class OrderController extends Controller
 {
@@ -15,9 +21,9 @@ class OrderController extends Controller
      */
     public function index()
     {
-        $orders = Order::get();
-
-        return view('orders.index', ['orders' => $orders]);
+        $getAllOrdersUseCase = new GetAllOrdersUseCase(new EloquentOrderRepository());
+        $dataOrders = $getAllOrdersUseCase->execute();
+        return view('orders.index', ['orders' => $dataOrders]);
     }
 
     /**
@@ -44,11 +50,17 @@ class OrderController extends Controller
             'customer_mobile' => ['required'],
         ]);
 
-        $order = new Order($request->all());
-        $order->status = 'CREATED';
-        $order->save();          
-        $idOrder = $order->id;
+        $eloquent = new EloquentOrderRepository();
+        $createOrder = new CreateOrderUseCase($eloquent);
         
+        $createOrder->execute(
+            $request->customer_name,
+            $request->customer_email,
+            $request->customer_mobile,
+            "CREATED"
+        );
+        
+        $idOrder = $eloquent->getSaveId();
         return redirect()->route('order.show', $idOrder);  
     }
 
@@ -58,17 +70,10 @@ class OrderController extends Controller
      * @param  \App\Models\Order  $order
      * @return \Illuminate\Http\Response
      */
-    public function show(Request $request, $idOrder)
+    public function show(Request $request, $orderId)
     {
-        $order = Order::find($idOrder);
-     
-        if($this->isPending($order)) {
-            $pay = new PayController(new Client());
-            $response = $pay->getRequestInformation($order->request_id);
-        
-            $order->status = $response['status'];
-            $order->save();    
-        }
+        $getOrderPayment = new GetOrderPaymentUseCase(new PlaceToPayService(), new EloquentOrderRepository());
+        $order = $getOrderPayment->execute($orderId);
 
         return view('orders.detail', ['order' => $order]);
     }
@@ -76,33 +81,17 @@ class OrderController extends Controller
     /**
      * Pay the specified order.
      */
-    public function processPayment($idOrder)
+    public function processPayment($orderId)
     {
-        $order = Order::find($idOrder);
-
-        $pay = new PayController(new Client());
-        $response = $pay->createRequest($order);
-
-        if(strtoupper($response['status']) == 'FAILED'){
-            return view('orders.detail', ['order' => $order]);
+        try {
+            $processPayment = new ProcessOrderPaymentUseCase(new PlaceToPayService, new EloquentOrderRepository);
+            $processUrl = $processPayment->execute($orderId);
+        } catch (Exception $exception) {
+            $findOrder = new FindOrderUseCase(new EloquentOrderRepository);
+            $dataOrder = $findOrder->execute($orderId);
+            return view('orders.detail', ['order' => $dataOrder]);
         }
-
-        if (!$this->isCreated($order)) {
-            return view('orders.detail', ['order' => $order]);
-        }
-
-        $order->request_id = $response['requestId'];
-        $order->status = 'PENDING';
-        $order->save();
         
-        return redirect()->to($response['processUrl']);  
-    }
-
-    private function isPending(Order $order) {
-        return strtoupper($order->status) == "PENDING";
-    }
-
-    private function isCreated(Order $order) {
-        return strtoupper($order->status) == "CREATED";
+        return redirect()->to($processUrl);  
     }
 }

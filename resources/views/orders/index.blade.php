@@ -22,14 +22,18 @@
             </thead>
             <tbody>
                 @forelse ($orders as $order)
+                    @php
+                        $order['created_at'] = date('Y-m-d H:i:s', strtotime($order['created_at']));
+                        $order['updated_at'] = date('Y-m-d H:i:s', strtotime($order['updated_at']));
+                    @endphp
                     <tr>
-                        <th scope="row">{{ $order->id }}</th>
-                        <td>{{ $order->created_at }}</td>
-                        <td>{{ $order->customer_name }}</td>
-                        <td>{{ $order->customer_email }}</td>
-                        <td>{{ $order->customer_mobile }}</td>
-                        <td>{{ $order->status }}</td>
-                        <td>{{ $order->updated_at }}</td>
+                        <th scope="row">{{ $order['id'] }}</th>
+                        <td>{{ $order['created_at'] }}</td>
+                        <td>{{ $order['customer_name'] }}</td>
+                        <td>{{ $order['customer_email'] }}</td>
+                        <td>{{ $order['customer_mobile'] }}</td>
+                        <td>{{ $order['status'] }}</td>
+                        <td>{{ $order['updated_at'] }}</td>
                         <td>
                             <div class="card-body col-md-2">
                                 <div class="dropdown show">
@@ -39,7 +43,7 @@
                                     </a>
                                     <div class="dropdown-menu" aria-labelledby="dropdownMenuLink">
                                         <a class="dropdown-item"
-                                            href="{{ route('order.show', $order->id) }}">Detalle</a>
+                                            href="{{ route('order.show', $order['id']) }}">Detalle</a>
                                            
                                     </div>
                                 </div>

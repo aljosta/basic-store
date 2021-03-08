@@ -14,8 +14,6 @@ class Order extends Model
         "customer_email",
         "customer_mobile",
         "status",
-        "created_at",
-        "updated_at",
         "request_id"
     ];
 }

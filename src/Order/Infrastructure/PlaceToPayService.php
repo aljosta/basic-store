@@ -1,41 +1,38 @@
 <?php
 
-namespace App\Http\Controllers;
+declare(strict_types=1);
 
-use GuzzleHttp\Client;
-use App\Models\Pay;
-use Illuminate\Http\Request;
-use App\Models\Order;
+namespace Src\Order\Infrastructure;
+
 use DateTime;
 use Illuminate\Support\Facades\Http;
+use Src\Order\Domain\Contracts\PaymentService;
+use Src\Order\Domain\OrderEntity;
+use Src\Order\Domain\OrderRequestId;
 
-class PayController extends Controller
-{
+final class PlaceToPayService implements PaymentService {
+
     private $url = 'https://dev.placetopay.com/redirection/';
     private $login = "6dd490faf9cb87a9862245da41170ff2";
     private $secretKey = "024h1IlD";
-    private $client;
 
-    public function __construct(Client $client)
-    {
-        $this->client= $client;
+    public function __construct() {
+
     }
 
-
-    public function createRequest(Order $order) {
-        
+    public function createRequest(OrderEntity $order): array {
         $fullPath = $this->url."api/session/";
 
         $body = [
             "auth" => $this->getAuth(),
             "locale" => "en_CO",
             "buyer" => [
-                "name" => $order->customer_name,
-                "email" => $order->customer_email,
-                "mobile" => $order->customer_mobile
+                "name" => $order->getName()->getValue(),
+                "email" => $order->getEmail()->getValue(),
+                "mobile" => $order->getMobile()->getValue()
             ],
             "payment" => [
-                "reference" => $order->id,
+                "reference" => $order->getId()->getValue(),
                  "description" => "Pago Test",
                 "amount" => [
                     "currency" => "COP",
@@ -44,13 +41,14 @@ class PayController extends Controller
                 "allowPartial" => false
             ],
             "expiration" => $this->getDateIso8601("expiration"), 
-            "returnUrl" => "http://basic-store.test/order/".$order->id, 
+            "returnUrl" => "http://basic-store.test/order/".$order->getId()->getValue(), 
             "ipAddress" => "127.0.0.1",
             "userAgent" => "PlacetoPay Sandbox"
         ];
-       
+
         $response = Http::post($fullPath, $body);
-        $responseBody = json_decode($response->getBody());
+    
+        $responseBody = json_decode($response->body());
 
         return array(
             'status' => $responseBody->status->status, 
@@ -58,20 +56,22 @@ class PayController extends Controller
             'processUrl' => $responseBody->processUrl
         );
     }
-
-    public function getRequestInformation($requestId) {
-
-        $fullPath = $this->url."api/session/".$requestId;
+    
+    public function getRequestInformation(OrderRequestId $requestId): array {
+        $fullPath = $this->url."api/session/".$requestId->getValue();
 
         $body = [
             "auth" => $this->getAuth(),
         ];
        
         $response = Http::post($fullPath, $body);
-        $responseBody = json_decode($response->getBody());
+       
+        $responseBody = json_decode($response->body());
+
         $infoPayment['status'] = $responseBody->status->status;
     
         return $infoPayment;
+
     }
 
     private function getAuth() {
@@ -98,4 +98,5 @@ class PayController extends Controller
 
         return $dateTime->format('c');
     }
+
 }
